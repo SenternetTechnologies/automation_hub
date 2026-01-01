@@ -3388,3 +3388,4 @@ Backfilling for 2026-06-22
 Backfilling for 2026-06-23
 Backfilling for 2026-06-24
 Backfilling for 2026-06-25
+Backfilling for 2026-01-01

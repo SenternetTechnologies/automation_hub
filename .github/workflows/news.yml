@@ -1,0 +1,20 @@
+name: Senternet Daily Tech News
+on:
+  schedule:
+    - cron: '10 8 * * *' # Daily at 9 AM
+
+jobs:
+  update-news:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Fetch News
+        run: |
+          echo "## Today's Tech Update" > tech-news.md
+          echo "AI trends are evolving fast in 2026. Stay tuned with Senternet!" >> tech-news.md
+          git config --global user.name "Senternet-News-Bot"
+          git config --global user.email "bot@senternet.tech"
+          git add tech-news.md
+          git commit -m "docs: daily tech update [skip ci]"
+          git push

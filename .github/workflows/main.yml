@@ -1,0 +1,23 @@
+name: Senternet Automation Engine
+on:
+  schedule:
+    - cron: '0 0 * * *' # Every day at 12:00 AM
+  workflow_dispatch:
+
+jobs:
+  update-activity:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Update Activity Log
+        run: |
+          echo "Automated update by Senternet Engine - $(date)" >> activity.log
+          git config --global user.name "Senternet-Bot"
+          git config --global user.email "senternettechnologies@gmail.com"
+          git add activity.log
+          git commit -m "chore: automated activity update for Senternet profile [skip ci]"
+          git push

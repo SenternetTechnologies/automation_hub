@@ -1,7 +1,8 @@
-name: Senternet Automation Engine
+name: Senternet High-Frequency Engine
 on:
   schedule:
-    - cron: '0 0 * * *' # Every day at 12:00 AM
+    # Runs every 15 minutes
+    - cron: '*/20 * * * *' 
   workflow_dispatch:
 
 jobs:
@@ -19,5 +20,5 @@ jobs:
           git config --global user.name "Senternet-Bot"
           git config --global user.email "senternettechnologies@gmail.com"
           git add activity.log
-          git commit -m "chore: automated activity update for Senternet profile [skip ci]"
+          git commit -m "chore: automated activity update [skip ci]"
           git push

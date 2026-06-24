@@ -1,0 +1,12 @@
+# .github/labeler.yml
+frontend-ui:
+  - 'src/**/*.html'
+  - 'src/**/*.css'
+  - 'public/**/*'
+
+javascript-logic:
+  - 'src/**/*.js'
+
+automation-scripts:
+  - 'backend/**/*'
+  - '.github/workflows/**/*'

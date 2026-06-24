@@ -1,0 +1,83 @@
+name: SENTERNET Core DevOps Hub
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    types: [ opened, synchronized, reopened ]
+  issues:
+    types: [ opened ]
+  schedule:
+    - cron: '0 0 * * *' # Runs daily at midnight to clean stale issues
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  statuses: write
+
+jobs:
+  # 1. AUTOMATED CODE REVIEW & QUALITY ASSURANCE
+  code-review:
+    name: Automated Code Quality & Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Super-Linter Code Review Engine
+        uses: super-linter/super-linter@v7
+        env:
+          VALIDATE_ALL_CODEBASE: false
+          DEFAULT_BRANCH: main
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Specialized rules for Senternet Tech Stack
+          VALIDATE_HTML: true
+          VALIDATE_CSS: true
+          VALIDATE_JAVASCRIPT_ES: true
+          VALIDATE_MARKDOWN: true
+
+  # 2. PULL REQUEST MANAGEMENT & AUTOMATED TRAGET LABELS
+  pull-request-automation:
+    name: PR Labeler and Review Assigner
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Auto-Label Pull Request Based on Scope
+        uses: actions/labeler@v5
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          configuration-path: ".github/labeler.yml"
+          sync-labels: true
+        continue-on-error: true
+
+      - name: Auto-Assign Reviewers to Incoming PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo, number } = context.issue;
+            // Automatically assigns the PR back to the repository owner for strict quality gatekeeping
+            await github.rest.issues.addAssignees({
+              owner,
+              repo,
+              issue_number: number,
+              assignees: [owner]
+            });
+
+  # 3. AUTOMATED REPOSITORY CLEANUP (ANTI-STALE ENGINE)
+  repository-cleanup:
+    name: Automatic Stale Issue & PR Cleanup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close Inactive Issues and Pull Requests
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: 'This issue has been automatically marked as stale because it has not had recent activity. It will be closed in 7 days if no further activity occurs.'
+          stale-pr-message: 'This Pull Request is stale because it has been open with no activity. Please update or it will be auto-closed.'
+          days-before-stale: 14
+          days-before-close: 7
+          stale-issue-label: 'stale'
+          stale-pr-label: 'stale'

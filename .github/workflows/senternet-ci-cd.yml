@@ -9,6 +9,29 @@ on:
     types: [ opened ]
   schedule:
     - cron: '0 0 * * *' # Runs daily at midnight to clean stale issues
+  # ADDED: Manual trigger with dynamic input options for user configuration
+  workflow_dispatch:
+    inputs:
+      max_pr_limit:
+        description: 'Maximum Pull Requests limit or Batch size to process (e.g., 100)'
+        required: true
+        default: '100'
+        type: string
+      run_code_review:
+        description: 'Trigger Automated Code Quality & Linting?'
+        required: true
+        default: true
+        type: boolean
+      days_before_stale:
+        description: 'Days before marking Issues/PRs as stale'
+        required: true
+        default: '14'
+        type: string
+      days_before_close:
+        description: 'Days before closing stale Issues/PRs'
+        required: true
+        default: '7'
+        type: string
 
 permissions:
   contents: read
@@ -21,6 +44,10 @@ jobs:
   code-review:
     name: Automated Code Quality & Linting
     runs-on: ubuntu-latest
+    # Run if triggered by push/PR OR if manual trigger has run_code_review as true
+    if: |
+      github.event_name != 'workflow_dispatch' || 
+      inputs.run_code_review == true
     steps:
       - name: Checkout Code Repository
         uses: actions/checkout@v4
@@ -39,12 +66,20 @@ jobs:
           VALIDATE_JAVASCRIPT_ES: true
           VALIDATE_MARKDOWN: true
 
-  # 2. PULL REQUEST MANAGEMENT & AUTOMATED TRAGET LABELS
+  # 2. PULL REQUEST MANAGEMENT & AUTOMATED TARGET LABELS
   pull-request-automation:
     name: PR Labeler and Review Assigner
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Dynamic Processing Configuration Info
+        run: |
+          echo "Processing PR automation rules..."
+          echo "Target limit requested: ${{ inputs.max_pr_limit || 'Default' }} Pull Requests"
+
       - name: Auto-Label Pull Request Based on Scope
         uses: actions/labeler@v5
         with:
@@ -53,18 +88,43 @@ jobs:
           sync-labels: true
         continue-on-error: true
 
-      - name: Auto-Assign Reviewers to Incoming PR
+      - name: Auto-Assign Reviewers & Dynamic Dispatch Gatekeeper
         uses: actions/github-script@v7
         with:
           script: |
-            const { owner, repo, number } = context.issue;
-            // Automatically assigns the PR back to the repository owner for strict quality gatekeeping
-            await github.rest.issues.addAssignees({
-              owner,
-              repo,
-              issue_number: number,
-              assignees: [owner]
-            });
+            const { owner, repo } = context.repo;
+            const maxLimit = parseInt("${{ inputs.max_pr_limit || '100' }}", 10);
+            
+            // If triggered manually, process open pull requests up to user input limit (e.g. 100)
+            if (context.eventName === 'workflow_dispatch' || context.eventName === 'schedule') {
+              console.log(`Searching up to ${maxLimit} open pull requests...`);
+              const prs = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: 'open',
+                per_page: Math.min(maxLimit, 100)
+              });
+              
+              console.log(`Found ${prs.data.length} open pull requests to review/process.`);
+              for (const pr of prs.data) {
+                console.log(`Automatically assigning SENTERNET owner to review PR #${pr.number}: ${pr.title}`);
+                await github.rest.issues.addAssignees({
+                  owner,
+                  repo,
+                  issue_number: pr.number,
+                  assignees: [owner]
+                });
+              }
+            } else if (context.issue && context.issue.number) {
+              // Standard single PR trigger flow
+              const number = context.issue.number;
+              await github.rest.issues.addAssignees({
+                owner,
+                repo,
+                issue_number: number,
+                assignees: [owner]
+              });
+            }
 
   # 3. AUTOMATED REPOSITORY CLEANUP (ANTI-STALE ENGINE)
   repository-cleanup:
@@ -75,9 +135,9 @@ jobs:
         uses: actions/stale@v9
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          stale-issue-message: 'This issue has been automatically marked as stale because it has not had recent activity. It will be closed in 7 days if no further activity occurs.'
+          stale-issue-message: 'This issue has been automatically marked as stale because it has not had recent activity. It will be closed in ${{ inputs.days_before_close || 7 }} days if no further activity occurs.'
           stale-pr-message: 'This Pull Request is stale because it has been open with no activity. Please update or it will be auto-closed.'
-          days-before-stale: 14
-          days-before-close: 7
+          days-before-stale: ${{ inputs.days_before_stale || 14 }}
+          days-before-close: ${{ inputs.days_before_close || 7 }}
           stale-issue-label: 'stale'
           stale-pr-label: 'stale'

@@ -1,0 +1,58 @@
+name: Bulk Backdated Contribution
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: 'Start date (YYYY-MM-DD)'
+        required: true
+        default: '2026-01-01'
+      end_date:
+        description: 'End date (YYYY-MM-DD)'
+        required: true
+        default: '2026-06-25'
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Backdate Bulk Commits
+        run: |
+          git config --global user.name "SENTERNET-Developer"
+          git config --global user.email "senternettechnologies@gmail.com"
+          
+          START=$(date -d "${{ github.event.inputs.start_date }}" +%s)
+          END=$(date -d "${{ github.event.inputs.end_date }}" +%s)
+          
+          # Target contributions per day
+          TARGET_CONTRIBUTIONS=1346
+          
+          for (( d=$START; d<=$END; d+=86400 )); do
+            DATE_STR=$(date -d "@$d" +%Y-%m-%d)
+            echo "Processing $DATE_STR with $TARGET_CONTRIBUTIONS commits..."
+            
+            for (( c=1; c<=$TARGET_CONTRIBUTIONS; c++ )); do
+              # Generates a highly unique structure for every single commit
+              echo "Date: $DATE_STR | Batch Commit: #$c | Timestamp: $(date +%s%N)" >> contributions.txt
+              git add contributions.txt
+              
+              # Spread out time dynamically across the day for realistic injection
+              HOUR=$(( (c % 8) + 9 ))  # Spreads between 09:00 AM and 05:00 PM
+              MIN=$(( c % 60 ))
+              SEC=$(( (c * 7) % 60 ))
+              
+              FORMATTED_TIME=$(printf "%02d:%02d:%02d" $HOUR $MIN $SEC)
+              
+              GIT_AUTHOR_DATE="$DATE_STR $FORMATTED_TIME" GIT_COMMITTER_DATE="$DATE_STR $FORMATTED_TIME" \
+              git commit -m "feat: contribution multiplier #$c for $DATE_STR" --quiet
+            done
+          done
+          
+          echo "Pushing all generated massive contributions to the master branch..."
+          git push origin HEAD:${{ github.ref_name }} --force
